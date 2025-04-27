@@ -143,10 +143,10 @@ fn check_egui_wants_focus(
 }
 
 fn do_camera_zoom(
-    mut query: Query<(
+    query: Query<(
         &PanCam,
         &Camera,
-        &mut OrthographicProjection,
+        &mut Projection,
         &mut Transform,
     )>,
     scroll_events: EventReader<MouseWheel>,
@@ -159,14 +159,19 @@ fn do_camera_zoom(
         return;
     }
 
-    let Ok(window) = primary_window.get_single() else {
+    let Ok(window) = primary_window.single() else {
         return;
     };
 
-    for (pan_cam, camera, mut proj, mut transform) in &mut query {
+    for (pan_cam, camera, mut proj, mut transform) in query {
         if !pan_cam.enabled {
             continue;
         }
+
+        let mut proj = match *proj {
+            Projection::Orthographic(ref mut proj) => proj,
+            _ => continue,
+        };
 
         let view_size = camera.logical_viewport_size().unwrap_or(window.size());
 
@@ -277,11 +282,11 @@ fn do_camera_movement(
     primary_window: Query<&Window, With<PrimaryWindow>>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
     keyboard_buttons: Res<ButtonInput<KeyCode>>,
-    mut query: Query<(&PanCam, &Camera, &mut Transform, &OrthographicProjection)>,
+    mut query: Query<(&PanCam, &Camera, &mut Transform, &Projection)>,
     mut last_pos: Local<Option<Vec2>>,
     time: Res<Time<Real>>,
 ) {
-    let Ok(window) = primary_window.get_single() else {
+    let Ok(window) = primary_window.single() else {
         return;
     };
     let window_size = window.size();
@@ -298,6 +303,10 @@ fn do_camera_movement(
         if !pan_cam.enabled {
             continue;
         }
+
+        let Projection::Orthographic(projection) = projection else {
+            continue;
+        };
 
         let proj_area_size = projection.area.size();
 
@@ -334,9 +343,9 @@ fn do_camera_movement(
 
 fn on_clamp_bounds(
     trigger: Trigger<PanCamClampBounds>,
-    mut query: Query<(&PanCam, &mut Transform, &OrthographicProjection)>,
+    mut query: Query<(&PanCam, &mut Transform, &Projection)>,
 ) {
-    if let Ok((pan_cam, mut transform, projection)) = query.get_mut(trigger.entity()) {
+    if let Ok((pan_cam, mut transform, Projection::Orthographic(projection))) = query.get_mut(trigger.target()) {
         if !pan_cam.enabled {
             return;
         }
@@ -347,8 +356,6 @@ fn on_clamp_bounds(
         transform.translation =
             clamp_to_safe_zone(proposed_cam_pos, pan_cam.aabb(), proj_area_size)
                 .extend(transform.translation.z);
-    } else {
-        warn_once!("Tried to clamp bounds for an unsupported entity.");
     }
 }
 

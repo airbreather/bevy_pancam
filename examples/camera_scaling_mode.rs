@@ -17,7 +17,7 @@ fn setup(mut commands: Commands) {
 
     commands.spawn((
         Camera2d,
-        ortho,
+        Projection::Orthographic(ortho),
         PanCam {
             min_x: -10.,
             max_x: 10.,
